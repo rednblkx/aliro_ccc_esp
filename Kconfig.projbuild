@@ -1,0 +1,123 @@
+menu "DW3000 driver"
+
+    config UWB_TWO_ROUNDS_ENABLE
+        bool "Advertise two ranging rounds per block (front/behind detection)"
+        default n
+        help
+          MAC Mode [b7:b6]=1 in Ranging Session Setup M3:
+          the session runs two exchanges per ranging block, the second in round
+          h(i)+Ok. The phase difference between the two rounds' measurements lets
+          the reader tell whether the user device is in front of or behind the
+          antenna plane. Doubles UWB airtime and range-callback rate; the unlock
+          policy in the app keeps consuming samples per round either way. The
+          round offset Ok is UWB_ROUND_OFFSET, clamped to 1..N_Round-1.
+
+    config UWB_ROUND_OFFSET
+        int "Second-round offset Ok (in ranging rounds, 0 = half the block)"
+        range 0 63
+        default 0
+        depends on UWB_TWO_ROUNDS_ENABLE
+        help
+          Offset between the first and second active rounds within a block.
+          0 selects N_Round/2 at M3 build time. Ignored when UWB_TWO_ROUNDS_ENABLE is off.
+
+    config DW3000_GPIO_IRQ
+        int "DW3000 GPIO for IRQ"
+        default -1
+        default 5 if IDF_TARGET_ESP32S3
+        default 23 if IDF_TARGET_ESP32C6
+
+    config DW3000_GPIO_RESET
+        int "DW3000 GPIO for RESET"
+        default -1
+        default 4 if IDF_TARGET_ESP32S3
+        default 22 if IDF_TARGET_ESP32C6
+
+    config DW3000_GPIO_WAKEUP
+        int "DW3000 GPIO for WAKEUP"
+        default -1
+        default 6 if IDF_TARGET_ESP32S3
+        default 21 if IDF_TARGET_ESP32C6
+
+    config DW3000_SPI_MOSI
+        int "DW3000 GPIO for MOSI"
+        default -1
+        default 11 if IDF_TARGET_ESP32S3
+        default 19 if IDF_TARGET_ESP32C6
+
+    config DW3000_SPI_MISO
+        int "DW3000 GPIO for MISO"
+        default -1
+        default 13 if IDF_TARGET_ESP32S3
+        default 20 if IDF_TARGET_ESP32C6
+
+    config DW3000_SPI_CLK
+        int "DW3000 GPIO for CLK"
+        default -1
+        default 12 if IDF_TARGET_ESP32S3
+        default 21 if IDF_TARGET_ESP32C6
+
+    config DW3000_SPI_CS
+        int "DW3000 GPIO for CS"
+        default -1
+        default 10 if IDF_TARGET_ESP32S3
+        default 18 if IDF_TARGET_ESP32C6
+
+    config DW3000_SPI_MAX_MHZ
+        int "DW3000 Max SPI speed in MHz"
+        default 36
+
+    choice
+        prompt "Select  Chip"
+        config DW3000_CHIP_DW3000
+            bool "DW3000"
+        config DW3000_CHIP_DW3720
+            bool "DW3720/QM33xx"
+    endchoice
+
+    menu "AoA (PDoA)"
+        config UWB_AOA_ENABLE
+            bool "Enable Angle-of-Arrival measurement"
+            default n
+            help
+              Requires a DW3220-class dual-RX transceiver with both antennas connected.
+              Configures PDoA mode 3 and reads the hardware PDoA on each STS reception;
+              the angle is attached to every ranging result. Single-antenna parts must
+              leave this disabled.
+
+        config UWB_AOA_ANT_SPACING_TENTHS_MM
+            int "Antenna center-to-center spacing (0.1 mm units)"
+            range 50 1000
+            default 231
+            depends on UWB_AOA_ENABLE
+            help
+              Center-to-center distance between the two RX antennas, in tenths of a
+              millimeter (the Kconfig version in use has no float type): 231 = 23.1 mm.
+              Used in AoA = asin(pdoa * lambda / (2*pi*d)); the unambiguous angular 
+              range is asin(lambda/(2*d)) per channel — with 23.1 mm on channel 9 that 
+              is about +/-54.4 deg.
+    endmenu
+
+    menu "NLOS mitigation (first-path power)"
+        config UWB_NLOS_ENABLE
+            bool "Enable first-path-power NLOS detection"
+            default y
+            help
+              Classifies each Final-frame STS reception as LOS or NLOS by comparing
+              the first-path power (F1^2+F2^2+F3^2 of the STS CIR) against the total
+              CIR power: under NLOS the first path is attenuated relative to the
+              late multipath energy, so a positive RSSI-minus-first-path margin
+              beyond the configured threshold flags the sample. The verdict is
+              attached to every ranging result; actuation gating stays in the app.
+
+        config UWB_NLOS_FP_MARGIN_DB
+            int "RSSI - first-path power margin classifying NLOS (dB)"
+            range 3 30
+            default 10
+            depends on UWB_NLOS_ENABLE
+            help
+              When total channel power exceeds the first-path power by more than
+              this margin, the sample is classified NLOS. 10 dB is a conservative
+              default: clear-LOS residential links typically sit below ~6 dB.
+    endmenu
+endmenu
