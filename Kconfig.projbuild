@@ -119,5 +119,30 @@ menu "DW3000 driver"
               When total channel power exceeds the first-path power by more than
               this margin, the sample is classified NLOS. 10 dB is a conservative
               default: clear-LOS residential links typically sit below ~6 dB.
+
+        config UWB_NLOS_AOA_JUMP_CENTI_DEG
+            int "AoA block-to-block jump treated as instability (1/100 deg)"
+            range 500 10800
+            default 2000
+            depends on UWB_NLOS_ENABLE
+            help
+              Through-wall ranging hops the PDoA between multipath components:
+              the reported angle jumps tens of degrees (including sign flips
+              across the PDoA fold) between consecutive blocks while same-room
+              ranging holds within ~13 deg. A jump beyond this threshold
+              latches the NLOS verdict for UWB_NLOS_AOA_HOLD_BLOCKS. Requires
+              AoA (UWB_AOA_ENABLE) to have any effect.
+
+        config UWB_NLOS_AOA_HOLD_BLOCKS
+            int "Blocks the NLOS verdict stays latched after an AoA jump"
+            range 1 100
+            default 10
+            depends on UWB_NLOS_ENABLE
+            help
+              The wall path can hold one sign for several consecutive blocks
+              (observed up to ~8) before flipping again; the latch keeps the
+              verdict up across those stretches so the unlock streak cannot
+              complete between flips. 10 blocks = 1.92 s at the default
+              192 ms block duration.
     endmenu
 endmenu
